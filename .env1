@@ -1,0 +1,9 @@
+DEEPSEEK_API_KEY=sk-a36880de85294b649190dc0870026ffe
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_MODEL=deepseek-r1
+DEEPSEEK_MAX_TOKENS=1000
+DEEPSEEK_TEMPERATURE=0.7
+DEEPSEEK_TIMEOUT=30
+ELEVENLABS_API_KEY=sk_11540ed8f87bd499b4f216ad860629c495cf18b0042b6ad8
+MONGODB_CONNECTION_STRING=mongodb+srv://Ayan:Ayanmusfa786@aifitnesstrainer.sc0rgyu.mongodb.net/fitness_ai?retryWrites=true&w=majority&appName=Aifitnesstrainer&tls=true&tlsInsecure=true
+MONGODB_DATABASE=fitness_ai
