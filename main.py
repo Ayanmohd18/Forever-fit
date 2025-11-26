@@ -181,6 +181,31 @@ def smart_workout_ui():
             for i, ex in enumerate(exercises, 1):
                 st.write(f"{i}. **{ex}** - 3 sets x 12 reps")
 
+# Import Health Integration Modules
+try:
+    from health_data_integration import health_data_input_ui, legendary_health_analytics, HealthDataManager
+    from google_fit_integration import google_fit_integration_ui
+    HEALTH_INTEGRATION_AVAILABLE = True
+    print("✅ Health integration modules loaded successfully")
+except ImportError as e:
+    print(f"❌ Health integration import failed: {e}")
+    HEALTH_INTEGRATION_AVAILABLE = False
+
+# Import Authentication System
+try:
+    from auth_system import AuthenticationUI, FitnessDatabase as AuthFitnessDatabase
+    AUTH_SYSTEM_AVAILABLE = True
+    print("✅ Auth system loaded successfully")
+except ImportError as e:
+    print(f"❌ Auth system import failed: {e}")
+    AUTH_SYSTEM_AVAILABLE = False
+except Exception as e:
+    print(f"❌ Auth system error: {e}")
+    AUTH_SYSTEM_AVAILABLE = False
+
+print(f"DEBUG: AUTH_AVAILABLE={AUTH_AVAILABLE}, AUTH_SYSTEM_AVAILABLE={AUTH_SYSTEM_AVAILABLE}")
+
+
 # Integrated Authentication and Health Data Classes
 class FitnessDatabase:
     def __init__(self):
@@ -1057,73 +1082,8 @@ class VoiceTrainer:
         cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         return np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
 
-def health_data_input_ui(user_id, db):
-    st.subheader("📊 Health Data Input")
-    tab1, tab2, tab3 = st.tabs(["❤️ Heart Rate", "👟 Steps", "🔥 Calories"])
-    with tab1:
-        bpm = st.number_input("Heart Rate (BPM)", min_value=40, max_value=200, value=75)
-        if st.button("Save Heart Rate", type="primary"):
-            if db.save_health_data(user_id, "heart_rate", {"bpm": bpm, "activity_type": "resting"}):
-                st.success("Heart rate saved!")
-    with tab2:
-        steps = st.number_input("Steps", min_value=0, max_value=50000, value=8000)
-        if st.button("Save Steps", type="primary"):
-            if db.save_health_data(user_id, "steps", {"steps": steps, "distance_km": steps * 0.0008}):
-                st.success("Steps saved!")
-    with tab3:
-        calories = st.number_input("Calories Burned", min_value=0, max_value=2000, value=300)
-        if st.button("Save Calories", type="primary"):
-            if db.save_health_data(user_id, "calories", {"calories_burned": calories, "activity": "general"}):
-                st.success("Calories saved!")
+# Local health functions removed in favor of external modules
 
-def legendary_health_analytics(user_id, db):
-    st.title("🏆 Legendary Health Analytics")
-    analytics_data = db.get_health_analytics(user_id, days=30)
-    if not any(analytics_data.values()):
-        st.info("No health data available. Add some data first.")
-        if st.button("🎲 Generate Sample Data"):
-            for i in range(7):
-                db.save_health_data(user_id, "heart_rate", {"bpm": random.randint(60, 100), "activity_type": "resting"})
-                db.save_health_data(user_id, "steps", {"steps": random.randint(5000, 15000), "distance_km": random.uniform(4, 12)})
-                db.save_health_data(user_id, "calories", {"calories_burned": random.randint(200, 800), "activity": "general"})
-            st.success("Sample data generated!")
-            st.rerun()
-        return
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if analytics_data["heart_rate"]:
-            avg_hr = sum(hr["bpm"] for hr in analytics_data["heart_rate"]) / len(analytics_data["heart_rate"])
-            st.metric("Avg Heart Rate", f"{int(avg_hr)} BPM")
-    with col2:
-        if analytics_data["steps"]:
-            total_steps = sum(step["steps"] for step in analytics_data["steps"])
-            st.metric("Total Steps", f"{total_steps:,}")
-    with col3:
-        if analytics_data["calories"]:
-            total_calories = sum(cal["calories_burned"] for cal in analytics_data["calories"])
-            st.metric("Calories Burned", f"{total_calories:,}")
-    if analytics_data["heart_rate"] and AUTH_AVAILABLE:
-        try:
-            hr_df = pd.DataFrame(analytics_data["heart_rate"])
-            hr_df['timestamp'] = pd.to_datetime(hr_df['timestamp'])
-            fig_hr = px.line(hr_df, x='timestamp', y='bpm', title="Heart Rate Over Time")
-            st.plotly_chart(fig_hr, use_container_width=True)
-        except:
-            st.info("Chart display requires plotly")
-
-def google_fit_integration_ui(user_id):
-    """Google Fit integration UI with full functionality"""
-    try:
-        from google_fit_integration import google_fit_integration_ui as gfit_ui
-        gfit_ui(user_id)
-    except ImportError:
-        st.subheader("🔗 Google Fit Integration")
-        st.info("Connect your fitness devices to sync data automatically!")
-        st.write("**Supported:** Apple Watch, Samsung Watch, Fitbit, Mi Band, etc.")
-        st.error("Google Fit integration module not found. Please ensure google_fit_integration.py is available.")
-    except Exception as e:
-        st.error(f"Error loading Google Fit integration: {e}")
-        st.info("Please check your Google API credentials in the .env file.")
 
 
 def voice_trainer_ui():
@@ -1486,23 +1446,36 @@ def main():
     # Apply Legendary Styles immediately
     apply_legendary_styles()
 
-    # Check authentication first
-    if AUTH_AVAILABLE:
-        if "authenticated" not in st.session_state:
-            st.session_state.authenticated = False
+    # Check authentication first - ALWAYS require login
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if not st.session_state.authenticated:
+        # Show authentication status for debugging
+        st.sidebar.info(f"Auth Available: {AUTH_AVAILABLE}")
+        st.sidebar.info(f"Auth System Available: {AUTH_SYSTEM_AVAILABLE}")
         
-        if not st.session_state.authenticated:
+        if AUTH_AVAILABLE and AUTH_SYSTEM_AVAILABLE:
             auth_ui = AuthenticationUI()
             auth_ui.show_login_page()
             return
         else:
-            # Get user data for authenticated user (only if not guest)
-            if st.session_state.user.get('user_id') != 'guest':
-                db = FitnessDatabase()
-                if db and db.client:
-                    user_data = db.get_user_data(st.session_state.user['user_id'])
-                else:
-                    user_data = {}
+            # Show error if auth system not available
+            st.error("Authentication system not available. Please check dependencies.")
+            st.info("Missing dependencies:")
+            if not AUTH_AVAILABLE:
+                st.write("- MongoDB connection libraries (pymongo, pandas, plotly)")
+            if not AUTH_SYSTEM_AVAILABLE:
+                st.write("- auth_system.py module")
+            st.stop()
+    else:
+        # Get user data for authenticated user (only if not guest)
+        if st.session_state.user.get('user_id') != 'guest':
+            db = AuthFitnessDatabase()
+            if db and db.client:
+                user_data = db.get_user_data(st.session_state.user['user_id'])
+            else:
+                user_data = {}
     
     # Theme Toggle
     if "theme" not in st.session_state:
@@ -1656,19 +1629,24 @@ def main():
                 st.header("🏥 Health Data Integration")
                 st.caption("Sync and analyze your fitness data from wearables")
                 
-                db = FitnessDatabase()
-                user_id = st.session_state.user['user_id']
+                if HEALTH_INTEGRATION_AVAILABLE:
+                    # Initialize specialized health manager
+                    health_manager = HealthDataManager()
+                    user_id = st.session_state.user['user_id']
+                    
+                    health_tab1, health_tab2, health_tab3 = st.tabs(["📊 Data Input", "🏆 Analytics", "🔗 Google Fit"])
                 
-                health_tab1, health_tab2, health_tab3 = st.tabs(["📊 Data Input", "🏆 Analytics", "🔗 Google Fit"])
-            
-            with health_tab1:
-                health_data_input_ui(user_id, db)
-            
-            with health_tab2:
-                legendary_health_analytics(user_id, db)
-            
-            with health_tab3:
-                google_fit_integration_ui(user_id)
+                    with health_tab1:
+                        health_data_input_ui(user_id, health_manager)
+                    
+                    with health_tab2:
+                        legendary_health_analytics(user_id, health_manager)
+                    
+                    with health_tab3:
+                        google_fit_integration_ui(user_id)
+                else:
+                    st.error("Health integration modules not available. Please check dependencies.")
+
 
     # Sidebar navigation
     st.sidebar.title("Exercise Options")

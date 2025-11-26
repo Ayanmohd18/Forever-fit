@@ -9,8 +9,8 @@ from typing import Dict, List, Optional
 import uuid
 import os
 from dotenv import load_dotenv
-from health_data_integration import HealthDataManager, health_data_input_ui, legendary_health_analytics
-from google_fit_integration import google_fit_integration_ui
+# Health data integration imports removed to avoid circular dependency
+# These will be imported directly in main.py instead
 
 load_dotenv()
 
@@ -189,6 +189,58 @@ class FitnessDatabase:
         except Exception as e:
             st.error(f"Error updating streak: {e}")
     
+    def generate_reset_token(self, email: str) -> Optional[str]:
+        """Generate password reset token"""
+        try:
+            user = self.users.find_one({"email": email})
+            if not user:
+                return None
+            
+            token = str(uuid.uuid4())[:8].upper()  # 8-character token
+            expiry = datetime.now() + timedelta(hours=1)
+            
+            self.users.update_one(
+                {"email": email},
+                {"$set": {
+                    "reset_token": token,
+                    "reset_token_expiry": expiry
+                }}
+            )
+            return token
+        except Exception as e:
+            st.error(f"Error generating reset token: {e}")
+            return None
+    
+    def reset_password(self, email: str, token: str, new_password: str) -> bool:
+        """Reset password using token"""
+        try:
+            user = self.users.find_one({"email": email})
+            if not user:
+                return False
+            
+            if user.get('reset_token') != token.upper():
+                return False
+            
+            if user.get('reset_token_expiry') < datetime.now():
+                return False
+            
+            hashed_password = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+            
+            self.users.update_one(
+                {"email": email},
+                {"$set": {
+                    "password": hashed_password
+                },
+                "$unset": {
+                    "reset_token": "",
+                    "reset_token_expiry": ""
+                }}
+            )
+            return True
+        except Exception as e:
+            st.error(f"Error resetting password: {e}")
+            return False
+    
     def get_user_data(self, user_id: str) -> Dict:
         try:
             user = self.users.find_one({"user_id": user_id})
@@ -217,13 +269,16 @@ class AuthenticationUI:
     def show_login_page(self):
         st.title("🏋️ Fitness AI Trainer")
         
-        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        tab1, tab2, tab3 = st.tabs(["Login", "Sign Up", "Forgot Password"])
         
         with tab1:
             self.show_login_form()
         
         with tab2:
             self.show_signup_form()
+        
+        with tab3:
+            self.show_forgot_password_form()
     
     def show_login_form(self):
         with st.form("login_form"):
@@ -279,6 +334,64 @@ class AuthenticationUI:
                         st.error("Email already exists or error creating account")
                 else:
                     st.error("Please fill all fields")
+    
+    def show_forgot_password_form(self):
+        """Password reset form"""
+        st.subheader("Reset Your Password")
+        
+        if 'reset_email' not in st.session_state:
+            # Step 1: Request reset code
+            with st.form("forgot_password_form"):
+                st.write("Enter your email address to receive a password reset code.")
+                email = st.text_input("Email")
+                
+                if st.form_submit_button("Send Reset Code", type="primary"):
+                    if email:
+                        token = self.db.generate_reset_token(email)
+                        if token:
+                            # Send email with token
+                            from main import send_password_reset_email
+                            if send_password_reset_email(email, token):
+                                st.success("✅ Reset code sent to your email!")
+                                st.session_state.reset_email = email
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ Email sent, but there may be SMTP configuration issues. Your reset code is: " + token)
+                                st.session_state.reset_email = email
+                                st.rerun()
+                        else:
+                            st.error("❌ Email not found in our system")
+                    else:
+                        st.error("Please enter your email")
+        else:
+            # Step 2: Reset password with code
+            with st.form("reset_password_form"):
+                st.write(f"Enter the reset code sent to **{st.session_state.reset_email}**")
+                token = st.text_input("Reset Code")
+                new_password = st.text_input("New Password", type="password")
+                confirm_password = st.text_input("Confirm Password", type="password")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.form_submit_button("Reset Password", type="primary"):
+                        if not token or not new_password or not confirm_password:
+                            st.error("Please fill all fields")
+                        elif new_password != confirm_password:
+                            st.error("Passwords don't match")
+                        elif len(new_password) < 6:
+                            st.error("Password must be at least 6 characters")
+                        else:
+                            if self.db.reset_password(st.session_state.reset_email, token, new_password):
+                                st.success("✅ Password reset successful! Please login with your new password.")
+                                del st.session_state.reset_email
+                                st.rerun()
+                            else:
+                                st.error("❌ Invalid or expired reset code")
+                
+                with col2:
+                    if st.form_submit_button("Cancel"):
+                        del st.session_state.reset_email
+                        st.rerun()
 
 def show_dashboard(user_data: Dict):
     st.title(f"Welcome back, {user_data['user']['name']}! 💪")
@@ -457,6 +570,13 @@ def show_analytics(user_data: Dict):
                 st.metric("Workouts Completed", total_workouts)
     else:
         st.info("Start logging your workouts to see analytics!")
+
+def show_health_data_tab(user_data: Dict):
+    """Health data integration tab - placeholder for now"""
+    st.subheader("🏥 Health Data Integration")
+    st.info("Health data features will be integrated in the main app tabs.")
+    st.write("Use the main app's 'Health Data' tab for full functionality.")
+
 
 def main():
     if "authenticated" not in st.session_state:
