@@ -1,18 +1,10 @@
-# System dependencies for Streamlit Cloud (Debian/Ubuntu)
-# These are apt packages required for the application
-
-# For OpenCV and image processing
 libgl1-mesa-glx
 libglib2.0-0
 libsm6
 libxext6
 libxrender-dev
 libgomp1
-
-# For audio processing (if needed)
 libsndfile1
-
-# For MediaPipe
 libgstreamer1.0-0
 gstreamer1.0-plugins-base
 gstreamer1.0-plugins-good
@@ -26,6 +18,4 @@ gstreamer1.0-gl
 gstreamer1.0-gtk3
 gstreamer1.0-qt5
 gstreamer1.0-pulseaudio
-
-# For ffmpeg (video processing)
 ffmpeg
